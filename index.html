@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Photo Zapper</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; background-color: #f9f9f9; }
+        .container { max-width: 600px; margin: 0 auto; border: 1px solid #ccc; padding: 25px; border-radius: 8px; background: #fff; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="file"], button { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+        button { background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #status { margin-top: 15px; font-weight: bold; }
+        .download-btn { display: inline-block; padding: 10px 15px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin-top: 10px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>Menu Photo Matcher</h2>
+        
+        <div class="form-group">
+            <label for="jsonFile">1. मेन्यू JSON फ़ाइल अपलोड करें:</label>
+            <input type="file" id="jsonFile" accept=".json">
+        </div>
+
+        <div class="form-group">
+            <label for="imageFolder">2. लोकल IMG फ़ोल्डर सेलेक्ट करें:</label>
+            <input type="file" id="imageFolder" webkitdirectory directory multiple>
+        </div>
+
+        <button id="processBtn" disabled>फ़ोटो मैच करें और ज़िप बनाएं</button>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        let jsonData = null;
+        let imageFiles = {};
+
+        // JSON फ़ाइल पढ़ना
+        document.getElementById('jsonFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    jsonData = JSON.parse(e.target.result);
+                    checkReady();
+                } catch (err) {
+                    alert('गलत JSON फ़ाइल है। कृपया सही फ़ाइल चुनें।');
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // लोकल इमेज फ़ोल्डर पढ़ना
+        document.getElementById('imageFolder').addEventListener('change', function(e) {
+            imageFiles = {};
+            for (let file of e.target.files) {
+                // फ़ाइल का नाम स्टोर करना (जैसे chicken_chilly.jpeg)
+                imageFiles[file.name.toLowerCase()] = file;
+            }
+            checkReady();
+        });
+
+        function checkReady() {
+            if (jsonData && Object.keys(imageFiles).length > 0) {
+                document.getElementById('processBtn').disabled = false;
+            }
+        }
+
+        // मैचिंग और ज़िप बनाना
+        document.getElementById('processBtn').addEventListener('click', async function() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = 'प्रोसेसिंग चल रही है... कृपया प्रतीक्षा करें।';
+            
+            const zip = new JSZip();
+            let matchedCount = 0;
+            const processedImages = new Set(); // डुप्लिकेट फ़ोटो दोबारा जोड़ने से बचने के लिए
+
+            for (let item of jsonData) {
+                if (!item.img) continue;
+
+                // "img/chicken_chilly.jpeg" से सिर्फ़ "chicken_chilly.jpeg" निकालना
+                let cleanFileName = item.img.split('/').pop().toLowerCase();
+
+                if (imageFiles[cleanFileName] && !processedImages.has(cleanFileName)) {
+                    zip.file(cleanFileName, imageFiles[cleanFileName]);
+                    processedImages.add(cleanFileName);
+                    matchedCount++;
+                }
+            }
+
+            if (matchedCount > 0) {
+                statusDiv.innerHTML = `कुल ${matchedCount} फ़ोटोज़ मैच हुईं। ज़िप तैयार की जा रही है...`;
+                
+                const content = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(content);
+                
+                statusDiv.innerHTML = `ज़िप तैयार हो गई है! कुल ${matchedCount} फ़ोटोज़ शामिल की गईं।<br>`;
+                
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = 'menu_matched_photos.zip';
+                downloadLink.textContent = 'ज़िप फ़ाइल डाउनलोड करें';
+                downloadLink.className = 'download-btn';
+                statusDiv.appendChild(downloadLink);
+            } else {
+                statusDiv.innerHTML = '<span style="color:red;">कोई भी फ़ोटो मैच नहीं हुई। कृपया फ़ोल्डर में मौजूद फ़ाइलों के नाम और JSON पाथ की जाँच करें।</span>';
+            }
+        });
+    </script>
+</body>
+</html>
