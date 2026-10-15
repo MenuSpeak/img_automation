@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Menu Photo Packager Studio</title>
+    <title>Universal Menu Photo Packager</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -42,7 +42,7 @@
 
         .container {
             width: 100%;
-            max-width: 780px;
+            max-width: 800px;
             background: var(--card-bg);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -105,7 +105,7 @@
 
         textarea {
             width: 100%;
-            height: 160px;
+            height: 170px;
             background: rgba(15, 23, 42, 0.6);
             border: 1.5px solid var(--card-border);
             border-radius: 14px;
@@ -255,7 +255,6 @@
             transform: translateY(-1px);
         }
 
-        /* Report styling */
         .report-section {
             margin-top: 20px;
             padding-top: 16px;
@@ -335,17 +334,17 @@
 
 <div class="container">
     <div class="header">
-        <h1>Menu Photo Packager</h1>
-        <p>मेन्यू JSON और फ़ोल्डर से मैचिंग फ़ोटोज़ को फ़िल्टर करके ज़िप बनाएं</p>
+        <h1>Universal Menu Photo Packager</h1>
+        <p>JSON / JS Object लिस्ट पेस्ट करें और लोकल फ़ोल्डर से मैचिंग फ़ोटो की ज़िप बनाएं</p>
     </div>
 
     <div class="form-group">
-        <label><span class="step-badge">1</span> JSON लिस्ट यहाँ पेस्ट करें</label>
-        <textarea id="jsonInput" placeholder='[&#10;  {"id": 1, "name": "चिकन चिली", "img": "img/chicken_chilly.jpeg"},&#10;  ...&#10;]'></textarea>
+        <label><span class="step-badge">1</span> मेन्यू डेटा यहाँ पेस्ट करें (JSON या JS ऐरे दोनों चलेगा)</label>
+        <textarea id="jsonInput" placeholder="[&#10;  { id: 'd1', name: 'Plain Dosa', img: 'img/plain_dosa.jpg' },&#10;  { id: 'd2', name: 'Masala Dosa', img: 'img/masala_dosa.jpg' }&#10;];"></textarea>
     </div>
 
     <div class="form-group">
-        <label><span class="step-badge">2</span> इमेज फ़ोल्डर चुनें</label>
+        <label><span class="step-badge">2</span> कंप्यूटर से इमेज फ़ोल्डर चुनें</label>
         <div class="folder-dropzone">
             <input type="file" id="imageFolder" webkitdirectory directory multiple>
             <span class="folder-icon">📁</span>
@@ -383,7 +382,7 @@
             for (let file of files) {
                 imageFiles[file.name.toLowerCase()] = file;
             }
-            folderLabel.innerText = `फ़ोल्डर लोड हो गया: ${files.length} फ़ाइलें मिलीं`;
+            folderLabel.innerText = `फ़ोल्डर लोड हो गया: कुल ${files.length} फ़ाइलें मिलीं`;
             folderSubtext.innerText = "तैयार है! अब नीचे दिए गए बटन पर क्लिक करें";
         } else {
             folderLabel.innerText = "फ़ोल्डर चुनने के लिए यहाँ क्लिक करें";
@@ -392,34 +391,68 @@
         checkReady();
     });
 
+    // किसी भी तरह के JSON या JS Object को पार्स करने वाला फंक्शन
+    function parseFlexibleData(rawText) {
+        let cleanText = rawText.trim();
+
+        // 1. अगर किसी वेरिएबल असाइनमेंट के साथ पेस्ट किया गया हो (जैसे: const menu = [...]; या var items = [...];)
+        cleanText = cleanText.replace(/^(const|let|var)\s+\w+\s*=\s*/, '');
+
+        // 2. आख़िर का सेमीकोलन (;) हटाएँ
+        if (cleanText.endsWith(';')) {
+            cleanText = cleanText.slice(0, -1).trim();
+        }
+
+        // 3. पहले स्टैंडर्ड JSON.parse की कोशिश करें
+        try {
+            return JSON.parse(cleanText);
+        } catch (e) {
+            // अगर फेल हुआ, तो सुरक्षित तरीके से JavaScript Expression इवैल्यूएट करें (सिंगल कोट्स, अनकोटेड कीज के लिए)
+            return new Function(`return (${cleanText})`)();
+        }
+    }
+
     processBtn.addEventListener('click', async function() {
         let menuItems = [];
         try {
-            menuItems = JSON.parse(jsonInput.value.trim());
+            menuItems = parseFlexibleData(jsonInput.value);
+            
+            // अगर यूज़र ने { menu: [...] } जैसा ऑब्जेक्ट डाल दिया हो
+            if (!Array.isArray(menuItems) && typeof menuItems === 'object') {
+                for (let key in menuItems) {
+                    if (Array.isArray(menuItems[key])) {
+                        menuItems = menuItems[key];
+                        break;
+                    }
+                }
+            }
+
             if (!Array.isArray(menuItems)) {
-                throw new Error("JSON डेटा एक Array [ ... ] होना चाहिए।");
+                throw new Error("डेटा एक Array [ ... ] फ़ॉर्मेट में होना चाहिए।");
             }
         } catch (err) {
-            showStatus(`JSON फ़ॉर्मेट अमान्य है: ${err.message}`, 'error');
+            showStatus(`डेटा फ़ॉर्मेट अमान्य है: ${err.message}`, 'error');
             return;
         }
 
-        showStatus('<div class="spinner"></div> फ़ोटो जाँची जा रही हैं और ज़िप बनाई जा रही है...', 'loading');
+        showStatus('<div class="spinner"></div> फ़ोटो जाँची जा रही हैं और ज़िप बन रही है...', 'loading');
         processBtn.disabled = true;
 
         setTimeout(async () => {
             const zip = new JSZip();
             let matchedCount = 0;
             const addedPhotos = new Set();
-            const missingPhotosMap = new Map(); // यूनिक मिसिंग फ़ोटोज़ स्टोर करने के लिए
+            const missingPhotosMap = new Map();
 
             for (let item of menuItems) {
-                if (!item.img) continue;
+                // फ़ील्ड नाम चाहे img, photo_name, image, photo, picture कुछ भी हो
+                let rawImgPath = item.img || item.photo_name || item.image || item.photo || item.picture;
+                if (!rawImgPath || typeof rawImgPath !== 'string') continue;
 
-                // "img/chicken_chilly.jpeg" -> "chicken_chilly.jpeg"
-                let targetFileName = item.img.split('/').pop().trim().toLowerCase();
+                // पाथ में से सिर्फ फ़ाइल का नाम निकालें (जैसे "img/plain_dosa.jpg" -> "plain_dosa.jpg")
+                let targetFileName = rawImgPath.split('/').pop().split('\\').pop().trim().toLowerCase();
 
-                // स्मार्ट मैच: अगर .jpeg है तो .jpg भी चेक करेगा और .jpg है तो .jpeg भी
+                // .jpg vs .jpeg दोनों चेक करें
                 let matchedFile = imageFiles[targetFileName];
                 if (!matchedFile) {
                     if (targetFileName.endsWith('.jpeg')) {
@@ -439,7 +472,7 @@
                     }
                 } else {
                     if (!missingPhotosMap.has(targetFileName)) {
-                        missingPhotosMap.set(targetFileName, item.name || 'N/A');
+                        missingPhotosMap.set(targetFileName, item.name || item.title || 'N/A');
                     }
                 }
             }
@@ -490,7 +523,6 @@
                     ${reportHtml}
                 `;
 
-                // मिसिंग नामों को क्लिपबोर्ड में कॉपी करने का फंक्शन
                 window.copyMissingFiles = function() {
                     const textToCopy = missingList.map(([fileName]) => fileName).join('\n');
                     navigator.clipboard.writeText(textToCopy).then(() => {
@@ -499,7 +531,7 @@
                 };
 
             } else {
-                showStatus('फ़ोल्डर में JSON से मैच करने वाली कोई भी फ़ोटो नहीं मिली। कृपया फ़ोल्डर और नामों की जाँच करें।', 'error');
+                showStatus('फ़ोल्डर में लिस्ट से मैच करने वाली कोई भी फ़ोटो नहीं मिली। फ़ोल्डर और नामों की जाँच करें।', 'error');
             }
             processBtn.disabled = false;
         }, 100);
