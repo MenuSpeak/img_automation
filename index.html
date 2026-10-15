@@ -1,116 +1,516 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Menu Photo Zapper</title>
+    <title>Menu Photo Packager Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; line-height: 1.6; background-color: #f9f9f9; }
-        .container { max-width: 600px; margin: 0 auto; border: 1px solid #ccc; padding: 25px; border-radius: 8px; background: #fff; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; }
-        input[type="file"], button { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
-        button { background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        #status { margin-top: 15px; font-weight: bold; }
-        .download-btn { display: inline-block; padding: 10px 15px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin-top: 10px; }
-    </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
-</head>
-<body>
-    <div class="container">
-        <h2>Menu Photo Matcher</h2>
-        
-        <div class="form-group">
-            <label for="jsonFile">1. मेन्यू JSON फ़ाइल अपलोड करें:</label>
-            <input type="file" id="jsonFile" accept=".json">
-        </div>
-
-        <div class="form-group">
-            <label for="imageFolder">2. लोकल IMG फ़ोल्डर सेलेक्ट करें:</label>
-            <input type="file" id="imageFolder" webkitdirectory directory multiple>
-        </div>
-
-        <button id="processBtn" disabled>फ़ोटो मैच करें और ज़िप बनाएं</button>
-        <div id="status"></div>
-    </div>
-
-    <script>
-        let jsonData = null;
-        let imageFiles = {};
-
-        // JSON फ़ाइल पढ़ना
-        document.getElementById('jsonFile').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    jsonData = JSON.parse(e.target.result);
-                    checkReady();
-                } catch (err) {
-                    alert('गलत JSON फ़ाइल है। कृपया सही फ़ाइल चुनें।');
-                }
-            };
-            reader.readAsText(file);
-        });
-
-        // लोकल इमेज फ़ोल्डर पढ़ना
-        document.getElementById('imageFolder').addEventListener('change', function(e) {
-            imageFiles = {};
-            for (let file of e.target.files) {
-                // फ़ाइल का नाम स्टोर करना (जैसे chicken_chilly.jpeg)
-                imageFiles[file.name.toLowerCase()] = file;
-            }
-            checkReady();
-        });
-
-        function checkReady() {
-            if (jsonData && Object.keys(imageFiles).length > 0) {
-                document.getElementById('processBtn').disabled = false;
-            }
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --accent: #06b6d4;
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%);
+            --card-bg: rgba(255, 255, 255, 0.07);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
         }
 
-        // मैचिंग और ज़िप बनाना
-        document.getElementById('processBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = 'प्रोसेसिंग चल रही है... कृपया प्रतीक्षा करें।';
-            
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 780px;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 36px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(to right, #a5b4fc, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-sub);
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        .form-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #e2e8f0;
+        }
+
+        .step-badge {
+            background: rgba(99, 102, 241, 0.25);
+            color: #818cf8;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 160px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1.5px solid var(--card-border);
+            border-radius: 14px;
+            padding: 14px;
+            color: #e2e8f0;
+            font-size: 13px;
+            font-family: 'Courier New', Courier, monospace;
+            resize: vertical;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+        }
+
+        .folder-dropzone {
+            position: relative;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 14px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(15, 23, 42, 0.3);
+        }
+
+        .folder-dropzone:hover {
+            border-color: var(--accent);
+            background: rgba(6, 182, 212, 0.05);
+        }
+
+        .folder-dropzone input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .folder-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .folder-label {
+            font-size: 14px;
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .folder-subtext {
+            font-size: 12px;
+            color: var(--text-sub);
+            margin-top: 4px;
+        }
+
+        .btn-process {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
+            margin-top: 10px;
+        }
+
+        .btn-process:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 25px -5px rgba(99, 102, 241, 0.6);
+        }
+
+        .btn-process:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        #statusBox {
+            margin-top: 24px;
+            padding: 18px;
+            border-radius: 14px;
+            display: none;
+            font-size: 14px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .status-loading {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #c7d2fe;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #818cf8;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-success {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #6ee7b7;
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .btn-download {
+            display: inline-block;
+            margin-top: 14px;
+            padding: 12px 24px;
+            background: #10b981;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            border-radius: 10px;
+            transition: all 0.2s;
+            box-shadow: 0 6px 15px -3px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-download:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        /* Report styling */
+        .report-section {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .missing-badge {
+            display: inline-block;
+            background: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .report-table-wrapper {
+            max-height: 220px;
+            overflow-y: auto;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.5);
+            margin-top: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        th {
+            background: rgba(30, 41, 59, 0.8);
+            color: #cbd5e1;
+            position: sticky;
+            top: 0;
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .file-tag {
+            font-family: monospace;
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .copy-missing-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.2s;
+        }
+
+        .copy-missing-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Menu Photo Packager</h1>
+        <p>मेन्यू JSON और फ़ोल्डर से मैचिंग फ़ोटोज़ को फ़िल्टर करके ज़िप बनाएं</p>
+    </div>
+
+    <div class="form-group">
+        <label><span class="step-badge">1</span> JSON लिस्ट यहाँ पेस्ट करें</label>
+        <textarea id="jsonInput" placeholder='[&#10;  {"id": 1, "name": "चिकन चिली", "img": "img/chicken_chilly.jpeg"},&#10;  ...&#10;]'></textarea>
+    </div>
+
+    <div class="form-group">
+        <label><span class="step-badge">2</span> इमेज फ़ोल्डर चुनें</label>
+        <div class="folder-dropzone">
+            <input type="file" id="imageFolder" webkitdirectory directory multiple>
+            <span class="folder-icon">📁</span>
+            <div class="folder-label" id="folderLabel">फ़ोल्डर चुनने के लिए यहाँ क्लिक करें</div>
+            <div class="folder-subtext" id="folderSubtext">जिसमें आपकी सभी फ़ोटोज़ सेव हैं</div>
+        </div>
+    </div>
+
+    <button id="processBtn" class="btn-process" disabled>फ़ोटो मैच करें और ज़िप बनाएं</button>
+    <div id="statusBox"></div>
+</div>
+
+<script>
+    const jsonInput = document.getElementById('jsonInput');
+    const imageFolder = document.getElementById('imageFolder');
+    const folderLabel = document.getElementById('folderLabel');
+    const folderSubtext = document.getElementById('folderSubtext');
+    const processBtn = document.getElementById('processBtn');
+    const statusBox = document.getElementById('statusBox');
+
+    let imageFiles = {};
+
+    function checkReady() {
+        const hasJson = jsonInput.value.trim().length > 0;
+        const hasImages = Object.keys(imageFiles).length > 0;
+        processBtn.disabled = !(hasJson && hasImages);
+    }
+
+    jsonInput.addEventListener('input', checkReady);
+
+    imageFolder.addEventListener('change', function(e) {
+        imageFiles = {};
+        const files = e.target.files;
+        if (files.length > 0) {
+            for (let file of files) {
+                imageFiles[file.name.toLowerCase()] = file;
+            }
+            folderLabel.innerText = `फ़ोल्डर लोड हो गया: ${files.length} फ़ाइलें मिलीं`;
+            folderSubtext.innerText = "तैयार है! अब नीचे दिए गए बटन पर क्लिक करें";
+        } else {
+            folderLabel.innerText = "फ़ोल्डर चुनने के लिए यहाँ क्लिक करें";
+            folderSubtext.innerText = "जिसमें आपकी सभी फ़ोटोज़ सेव हैं";
+        }
+        checkReady();
+    });
+
+    processBtn.addEventListener('click', async function() {
+        let menuItems = [];
+        try {
+            menuItems = JSON.parse(jsonInput.value.trim());
+            if (!Array.isArray(menuItems)) {
+                throw new Error("JSON डेटा एक Array [ ... ] होना चाहिए।");
+            }
+        } catch (err) {
+            showStatus(`JSON फ़ॉर्मेट अमान्य है: ${err.message}`, 'error');
+            return;
+        }
+
+        showStatus('<div class="spinner"></div> फ़ोटो जाँची जा रही हैं और ज़िप बनाई जा रही है...', 'loading');
+        processBtn.disabled = true;
+
+        setTimeout(async () => {
             const zip = new JSZip();
             let matchedCount = 0;
-            const processedImages = new Set(); // डुप्लिकेट फ़ोटो दोबारा जोड़ने से बचने के लिए
+            const addedPhotos = new Set();
+            const missingPhotosMap = new Map(); // यूनिक मिसिंग फ़ोटोज़ स्टोर करने के लिए
 
-            for (let item of jsonData) {
+            for (let item of menuItems) {
                 if (!item.img) continue;
 
-                // "img/chicken_chilly.jpeg" से सिर्फ़ "chicken_chilly.jpeg" निकालना
-                let cleanFileName = item.img.split('/').pop().toLowerCase();
+                // "img/chicken_chilly.jpeg" -> "chicken_chilly.jpeg"
+                let targetFileName = item.img.split('/').pop().trim().toLowerCase();
 
-                if (imageFiles[cleanFileName] && !processedImages.has(cleanFileName)) {
-                    zip.file(cleanFileName, imageFiles[cleanFileName]);
-                    processedImages.add(cleanFileName);
-                    matchedCount++;
+                // स्मार्ट मैच: अगर .jpeg है तो .jpg भी चेक करेगा और .jpg है तो .jpeg भी
+                let matchedFile = imageFiles[targetFileName];
+                if (!matchedFile) {
+                    if (targetFileName.endsWith('.jpeg')) {
+                        const altName = targetFileName.replace(/\.jpeg$/, '.jpg');
+                        matchedFile = imageFiles[altName];
+                    } else if (targetFileName.endsWith('.jpg')) {
+                        const altName = targetFileName.replace(/\.jpg$/, '.jpeg');
+                        matchedFile = imageFiles[altName];
+                    }
+                }
+
+                if (matchedFile) {
+                    if (!addedPhotos.has(matchedFile.name.toLowerCase())) {
+                        zip.file(matchedFile.name, matchedFile);
+                        addedPhotos.add(matchedFile.name.toLowerCase());
+                        matchedCount++;
+                    }
+                } else {
+                    if (!missingPhotosMap.has(targetFileName)) {
+                        missingPhotosMap.set(targetFileName, item.name || 'N/A');
+                    }
                 }
             }
 
+            const missingList = Array.from(missingPhotosMap.entries());
+
             if (matchedCount > 0) {
-                statusDiv.innerHTML = `कुल ${matchedCount} फ़ोटोज़ मैच हुईं। ज़िप तैयार की जा रही है...`;
-                
-                const content = await zip.generateAsync({ type: 'blob' });
-                const url = URL.createObjectURL(content);
-                
-                statusDiv.innerHTML = `ज़िप तैयार हो गई है! कुल ${matchedCount} फ़ोटोज़ शामिल की गईं।<br>`;
-                
-                const downloadLink = document.createElement('a');
-                downloadLink.href = url;
-                downloadLink.download = 'menu_matched_photos.zip';
-                downloadLink.textContent = 'ज़िप फ़ाइल डाउनलोड करें';
-                downloadLink.className = 'download-btn';
-                statusDiv.appendChild(downloadLink);
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const zipUrl = URL.createObjectURL(zipBlob);
+
+                let reportHtml = '';
+                if (missingList.length > 0) {
+                    let missingRows = missingList.map(([fileName, itemName], idx) => `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td><span class="file-tag">${fileName}</span></td>
+                            <td style="color:#cbd5e1;">${itemName}</td>
+                        </tr>
+                    `).join('');
+
+                    reportHtml = `
+                        <div class="report-section">
+                            <div class="missing-badge">⚠️ ${missingList.length} फ़ोटोज़ फ़ोल्डर में नहीं मिलीं</div>
+                            <div class="report-table-wrapper">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>फ़ोटो का नाम</th>
+                                            <th>मेन्यू आइटम</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${missingRows}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button class="copy-missing-btn" onclick="copyMissingFiles()">अनुपलब्ध (Missing) फ़ाइलों के नाम कॉपी करें</button>
+                        </div>
+                    `;
+                }
+
+                statusBox.className = 'status-success';
+                statusBox.style.display = 'block';
+                statusBox.innerHTML = `
+                    <div style="font-size: 16px;"><strong>काम पूरा हुआ!</strong> कुल <b>${matchedCount}</b> फ़ोटोज़ पैक हो चुकी हैं।</div>
+                    <a href="${zipUrl}" download="menu_matched_photos.zip" class="btn-download">डाउनलोड ज़िप (.zip)</a>
+                    ${reportHtml}
+                `;
+
+                // मिसिंग नामों को क्लिपबोर्ड में कॉपी करने का फंक्शन
+                window.copyMissingFiles = function() {
+                    const textToCopy = missingList.map(([fileName]) => fileName).join('\n');
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        alert('अनुपलब्ध फ़ाइलों की सूची क्लिपबोर्ड पर कॉपी हो गई है!');
+                    });
+                };
+
             } else {
-                statusDiv.innerHTML = '<span style="color:red;">कोई भी फ़ोटो मैच नहीं हुई। कृपया फ़ोल्डर में मौजूद फ़ाइलों के नाम और JSON पाथ की जाँच करें।</span>';
+                showStatus('फ़ोल्डर में JSON से मैच करने वाली कोई भी फ़ोटो नहीं मिली। कृपया फ़ोल्डर और नामों की जाँच करें।', 'error');
             }
-        });
-    </script>
+            processBtn.disabled = false;
+        }, 100);
+    });
+
+    function showStatus(message, type) {
+        statusBox.className = `status-${type}`;
+        statusBox.innerHTML = message;
+        statusBox.style.display = 'block';
+    }
+</script>
+
 </body>
 </html>
