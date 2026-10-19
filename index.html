@@ -42,7 +42,7 @@
 
         .container {
             width: 100%;
-            max-width: 800px;
+            max-width: 820px;
             background: var(--card-bg);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -105,7 +105,7 @@
 
         textarea {
             width: 100%;
-            height: 170px;
+            height: 180px;
             background: rgba(15, 23, 42, 0.6);
             border: 1.5px solid var(--card-border);
             border-radius: 14px;
@@ -219,6 +219,7 @@
             border-top: 2px solid transparent;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
         }
 
         @keyframes spin {
@@ -273,7 +274,7 @@
         }
 
         .report-table-wrapper {
-            max-height: 220px;
+            max-height: 240px;
             overflow-y: auto;
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -328,6 +329,24 @@
         .copy-missing-btn:hover {
             background: rgba(255, 255, 255, 0.2);
         }
+
+        .hint-box {
+            font-size: 12px;
+            color: var(--text-sub);
+            background: rgba(6, 182, 212, 0.08);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-top: 10px;
+            line-height: 1.6;
+        }
+
+        .hint-box code {
+            background: rgba(255,255,255,0.1);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -335,12 +354,15 @@
 <div class="container">
     <div class="header">
         <h1>Universal Menu Photo Packager</h1>
-        <p>JSON / JS Object लिस्ट पेस्ट करें और लोकल फ़ोल्डर से मैचिंग फ़ोटो की ज़िप बनाएं</p>
+        <p>किसी भी फ़ॉर्मेट का JSON, JS Object या Plain Text मेन्यू पेस्ट करें — टूल खुद इमेज फ़ाइल नाम ढूँढ लेगा</p>
     </div>
 
     <div class="form-group">
-        <label><span class="step-badge">1</span> मेन्यू डेटा यहाँ पेस्ट करें (JSON या JS ऐरे दोनों चलेगा)</label>
-        <textarea id="jsonInput" placeholder="[&#10;  { id: 'd1', name: 'Plain Dosa', img: 'img/plain_dosa.jpg' },&#10;  { id: 'd2', name: 'Masala Dosa', img: 'img/masala_dosa.jpg' }&#10;];"></textarea>
+        <label><span class="step-badge">1</span> मेन्यू डेटा यहाँ पेस्ट करें</label>
+        <textarea id="jsonInput" placeholder="कोई भी फ़ॉर्मेट चलेगा:&#10;&#10;✓ JSON array: [{ &quot;name&quot;: &quot;Dosa&quot;, &quot;img&quot;: &quot;img/dosa.jpg&quot; }]&#10;✓ JS object: const menu = [...]&#10;✓ Nested object: { &quot;starters&quot;: [...], &quot;main&quot;: [...] }&#10;✓ Plain text: सिर्फ़ फ़ाइल नाम या मेन्यू आइटम नाम&#10;✓ कोई भी key जैसे img, image, photo, file, path..."></textarea>
+        <div class="hint-box">
+            💡 <b>स्मार्ट डिटेक्शन:</b> टूल हर object में जाकर <code>img</code>, <code>image</code>, <code>photo</code>, <code>picture</code>, <code>file</code>, <code>path</code>, <code>thumbnail</code>, <code>src</code> जैसी keys खुद ढूँढता है। Plain text में भी फ़ाइल नाम और मेन्यू आइटम नाम से मैचिंग होती है।
+        </div>
     </div>
 
     <div class="form-group">
@@ -349,7 +371,7 @@
             <input type="file" id="imageFolder" webkitdirectory directory multiple>
             <span class="folder-icon">📁</span>
             <div class="folder-label" id="folderLabel">फ़ोल्डर चुनने के लिए यहाँ क्लिक करें</div>
-            <div class="folder-subtext" id="folderSubtext">जिसमें आपकी सभी फ़ोटोज़ सेव हैं</div>
+            <div class="folder-subtext" id="folderSubtext">जिसमें आपकी सभी फ़ोटोज़ सेव हैं (सबफ़ोल्डर भी चलेंगे)</div>
         </div>
     </div>
 
@@ -365,11 +387,14 @@
     const processBtn = document.getElementById('processBtn');
     const statusBox = document.getElementById('statusBox');
 
-    let imageFiles = {};
+    let imageFiles = {};          // lowercased basename -> File
+    let imageFilesFull = {};      // lowercased basename -> File (alias store, same)
+    let allFileBasenames = [];    // for fuzzy matching
+    let totalImageCount = 0;
 
     function checkReady() {
         const hasJson = jsonInput.value.trim().length > 0;
-        const hasImages = Object.keys(imageFiles).length > 0;
+        const hasImages = totalImageCount > 0;
         processBtn.disabled = !(hasJson && hasImages);
     }
 
@@ -377,61 +402,249 @@
 
     imageFolder.addEventListener('change', function(e) {
         imageFiles = {};
+        imageFilesFull = {};
+        allFileBasenames = [];
+        totalImageCount = 0;
         const files = e.target.files;
         if (files.length > 0) {
             for (let file of files) {
-                imageFiles[file.name.toLowerCase()] = file;
+                const base = file.name.toLowerCase();
+                if (!imageFiles[base]) {
+                    imageFiles[base] = file;
+                    imageFilesFull[base] = file;
+                    allFileBasenames.push(base);
+                }
             }
+            totalImageCount = files.length;
             folderLabel.innerText = `फ़ोल्डर लोड हो गया: कुल ${files.length} फ़ाइलें मिलीं`;
             folderSubtext.innerText = "तैयार है! अब नीचे दिए गए बटन पर क्लिक करें";
         } else {
             folderLabel.innerText = "फ़ोल्डर चुनने के लिए यहाँ क्लिक करें";
-            folderSubtext.innerText = "जिसमें आपकी सभी फ़ोटोज़ सेव हैं";
+            folderSubtext.innerText = "जिसमें आपकी सभी फ़ोटोज़ सेव हैं (सबफ़ोल्डर भी चलेंगे)";
         }
         checkReady();
     });
 
-    // किसी भी तरह के JSON या JS Object को पार्स करने वाला फंक्शन
+    /* ----------------------------------------------------------
+       Flexible parser: JSON, JS object, single object, plain text
+       ---------------------------------------------------------- */
     function parseFlexibleData(rawText) {
         let cleanText = rawText.trim();
 
-        // 1. अगर किसी वेरिएबल असाइनमेंट के साथ पेस्ट किया गया हो (जैसे: const menu = [...]; या var items = [...];)
-        cleanText = cleanText.replace(/^(const|let|var)\s+\w+\s*=\s*/, '');
+        // Remove common wrappers
+        cleanText = cleanText.replace(/^(const|let|var|export\s+const|export\s+default)\s+\w+\s*=\s*/, '');
+        if (cleanText.endsWith(';')) cleanText = cleanText.slice(0, -1).trim();
 
-        // 2. आख़िर का सेमीकोलन (;) हटाएँ
-        if (cleanText.endsWith(';')) {
-            cleanText = cleanText.slice(0, -1).trim();
-        }
-
-        // 3. पहले स्टैंडर्ड JSON.parse की कोशिश करें
+        // Try JSON first
         try {
-            return JSON.parse(cleanText);
-        } catch (e) {
-            // अगर फेल हुआ, तो सुरक्षित तरीके से JavaScript Expression इवैल्यूएट करें (सिंगल कोट्स, अनकोटेड कीज के लिए)
-            return new Function(`return (${cleanText})`)();
-        }
+            return { type: 'json', data: JSON.parse(cleanText) };
+        } catch (e) { /* ignore */ }
+
+        // Try JS eval
+        try {
+            const evaluated = new Function(`return (${cleanText})`)();
+            return { type: 'json', data: evaluated };
+        } catch (e) { /* ignore */ }
+
+        // Try JSON5-ish / trailing comma fix
+        try {
+            const fixed = cleanText
+                .replace(/,\s*([}\]])/g, '$1')          // remove trailing commas
+                .replace(/'/g, '"')                    // single to double quotes
+                .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":'); // quote keys
+            return { type: 'json', data: JSON.parse(fixed) };
+        } catch (e) { /* ignore */ }
+
+        // Fallback: plain text
+        return { type: 'text', data: cleanText };
     }
 
-    processBtn.addEventListener('click', async function() {
-        let menuItems = [];
-        try {
-            menuItems = parseFlexibleData(jsonInput.value);
-            
-            // अगर यूज़र ने { menu: [...] } जैसा ऑब्जेक्ट डाल दिया हो
-            if (!Array.isArray(menuItems) && typeof menuItems === 'object') {
-                for (let key in menuItems) {
-                    if (Array.isArray(menuItems[key])) {
-                        menuItems = menuItems[key];
-                        break;
+    /* ----------------------------------------------------------
+       Collect candidate strings that could be image filenames
+       ---------------------------------------------------------- */
+    function collectImageCandidates(data) {
+        const candidates = []; // { filename?, name? }
+        const seen = new Set();
+
+        const imgKeys = ['img','image','photo','picture','pic','file','filename','file_name',
+                         'path','filepath','file_path','src','thumbnail','thumb','photo_name',
+                         'photoName','imageName','image_name','imgPath','img_path','url','link'];
+
+        function looksLikeImagePath(str) {
+            if (typeof str !== 'string') return false;
+            const s = str.toLowerCase().trim();
+            if (!s) return false;
+            // ends with image ext OR contains a slash with image ext somewhere
+            return /\.(jpe?g|png|webp|gif|bmp|svg|avif|heic)(\?.*)?$/i.test(s);
+        }
+
+        function extractFilename(str) {
+            if (typeof str !== 'string') return null;
+            // take last path segment, strip query string
+            let s = str.trim().split('?')[0].split('#')[0];
+            s = s.split('/').pop().split('\\').pop().trim();
+            return s || null;
+        }
+
+        function walk(node, depth) {
+            if (depth > 8 || node === null || node === undefined) return;
+
+            if (typeof node === 'string') {
+                if (looksLikeImagePath(node)) {
+                    const fn = extractFilename(node);
+                    if (fn) {
+                        const key = fn.toLowerCase();
+                        if (!seen.has(key)) { seen.add(key); candidates.push({ filename: fn }); }
                     }
                 }
+                return;
             }
 
-            if (!Array.isArray(menuItems)) {
-                throw new Error("डेटा एक Array [ ... ] फ़ॉर्मेट में होना चाहिए।");
+            if (Array.isArray(node)) {
+                node.forEach(el => walk(el, depth + 1));
+                return;
             }
+
+            if (typeof node === 'object') {
+                // check for img keys first
+                for (const k of Object.keys(node)) {
+                    const lk = k.toLowerCase();
+                    if (imgKeys.includes(lk) && typeof node[k] === 'string' && looksLikeImagePath(node[k])) {
+                        const fn = extractFilename(node[k]);
+                        if (fn) {
+                            const key = fn.toLowerCase();
+                            if (!seen.has(key)) { seen.add(key); candidates.push({ filename: fn }); }
+                        }
+                    }
+                }
+                // then recurse
+                for (const k of Object.keys(node)) {
+                    walk(node[k], depth + 1);
+                }
+            }
+        }
+
+        walk(data, 0);
+        return candidates;
+    }
+
+    /* ----------------------------------------------------------
+       Extract all meaningful words for plain-text/fuzzy matching
+       ---------------------------------------------------------- */
+    function collectWordsFromData(data) {
+        const words = new Set();
+        function walk(node, depth) {
+            if (depth > 8 || node === null || node === undefined) return;
+            if (typeof node === 'string') {
+                node.split(/[\s,;:|/\\()\[\]{}"'<>]+/).forEach(w => {
+                    const lw = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (lw.length >= 3) words.add(lw);
+                });
+                return;
+            }
+            if (Array.isArray(node)) { node.forEach(el => walk(el, depth + 1)); return; }
+            if (typeof node === 'object') {
+                for (const k of Object.keys(node)) walk(node[k], depth + 1);
+            }
+        }
+        walk(data, 0);
+        return words;
+    }
+
+    /* ----------------------------------------------------------
+       Name normalization helpers
+       ---------------------------------------------------------- */
+    function normalizeName(name) {
+        return (name || '')
+            .toLowerCase()
+            .replace(/\.[a-z0-9]+$/, '')     // remove ext
+            .replace(/[^a-z0-9]+/g, '');    // remove everything else
+    }
+
+    function tokenSet(name) {
+        return new Set(
+            (name || '')
+                .toLowerCase()
+                .replace(/\.[a-z0-9]+$/, '')
+                .split(/[^a-z0-9]+/)
+                .filter(Boolean)
+        );
+    }
+
+    function similarity(a, b) {
+        // Jaccard-ish on tokens
+        const ta = tokenSet(a), tb = tokenSet(b);
+        if (ta.size === 0 || tb.size === 0) return 0;
+        let inter = 0;
+        ta.forEach(t => { if (tb.has(t)) inter++; });
+        const union = ta.size + tb.size - inter;
+        return union === 0 ? 0 : inter / union;
+    }
+
+    function findBestImageMatch(candidateFilename, candidateWords) {
+        // 1. exact basename
+        const exact = imageFiles[candidateFilename.toLowerCase()];
+        if (exact) return exact;
+
+        // 2. alternate extension
+        const lower = candidateFilename.toLowerCase();
+        const alts = [];
+        if (lower.endsWith('.jpeg')) alts.push(lower.replace(/\.jpeg$/, '.jpg'));
+        if (lower.endsWith('.jpg'))  alts.push(lower.replace(/\.jpg$/, '.jpeg'));
+        if (lower.endsWith('.png'))  alts.push(lower.replace(/\.png$/, '.jpg'), lower.replace(/\.png$/, '.jpeg'));
+        for (const a of alts) if (imageFiles[a]) return imageFiles[a];
+
+        // 3. fuzzy by name (normalized)
+        const targetNorm = normalizeName(candidateFilename);
+        if (targetNorm.length >= 4) {
+            let best = null, bestScore = 0;
+            for (const base of allFileBasenames) {
+                const n = normalizeName(base);
+                if (n === targetNorm) return imageFiles[base];
+                // one contains the other
+                if (n.length >= 4 && targetNorm.length >= 4 &&
+                    (n.includes(targetNorm) || targetNorm.includes(n))) {
+                    const score = Math.min(n.length, targetNorm.length) / Math.max(n.length, targetNorm.length);
+                    if (score > bestScore) { bestScore = score; best = base; }
+                }
+            }
+            if (best && bestScore >= 0.6) return imageFiles[best];
+        }
+
+        // 4. fuzzy by tokens (e.g., chicken_manchurian vs chicken manchurian)
+        let best = null, bestSim = 0;
+        for (const base of allFileBasenames) {
+            const sim = similarity(candidateFilename, base);
+            if (sim > bestSim) { bestSim = sim; best = base; }
+        }
+        if (best && bestSim >= 0.75) return imageFiles[best];
+
+        // 5. last resort: any image whose basename contains ALL significant tokens of candidate
+        const candTokens = [...tokenSet(candidateFilename)].filter(t => t.length >= 3);
+        if (candTokens.length > 0) {
+            for (const base of allFileBasenames) {
+                const baseTokens = tokenSet(base);
+                const allMatch = candTokens.every(t => {
+                    // token may be part of a bigger word
+                    for (const bt of baseTokens) if (bt.includes(t) || t.includes(bt)) return true;
+                    return false;
+                });
+                if (allMatch) return imageFiles[base];
+            }
+        }
+
+        return null;
+    }
+
+    /* ----------------------------------------------------------
+       Main processing
+       ---------------------------------------------------------- */
+    processBtn.addEventListener('click', async function() {
+        let parsed;
+        try {
+            parsed = parseFlexibleData(jsonInput.value);
         } catch (err) {
-            showStatus(`डेटा फ़ॉर्मेट अमान्य है: ${err.message}`, 'error');
+            showStatus(`डेटा पार्स नहीं हो सका: ${err.message}`, 'error');
             return;
         }
 
@@ -440,44 +653,69 @@
 
         setTimeout(async () => {
             const zip = new JSZip();
-            let matchedCount = 0;
-            const addedPhotos = new Set();
-            const missingPhotosMap = new Map();
+            const addedPhotos = new Set();          // lowercased filename
+            const missingList = [];                 // { filename, itemName }
 
-            for (let item of menuItems) {
-                // फ़ील्ड नाम चाहे img, photo_name, image, photo, picture कुछ भी हो
-                let rawImgPath = item.img || item.photo_name || item.image || item.photo || item.picture;
-                if (!rawImgPath || typeof rawImgPath !== 'string') continue;
+            let candidates = [];
 
-                // पाथ में से सिर्फ फ़ाइल का नाम निकालें (जैसे "img/plain_dosa.jpg" -> "plain_dosa.jpg")
-                let targetFileName = rawImgPath.split('/').pop().split('\\').pop().trim().toLowerCase();
+            if (parsed.type === 'json') {
+                candidates = collectImageCandidates(parsed.data);
 
-                // .jpg vs .jpeg दोनों चेक करें
-                let matchedFile = imageFiles[targetFileName];
-                if (!matchedFile) {
-                    if (targetFileName.endsWith('.jpeg')) {
-                        const altName = targetFileName.replace(/\.jpeg$/, '.jpg');
-                        matchedFile = imageFiles[altName];
-                    } else if (targetFileName.endsWith('.jpg')) {
-                        const altName = targetFileName.replace(/\.jpg$/, '.jpeg');
-                        matchedFile = imageFiles[altName];
-                    }
+                // If JSON had no image paths at all, fall back to words from data
+                if (candidates.length === 0) {
+                    const words = collectWordsFromData(parsed.data);
+                    candidates = Array.from(words).map(w => ({ filename: w }));
                 }
+            } else {
+                // plain text: split into tokens/lines
+                const text = parsed.data;
+                const tokens = new Set();
+                // full lines as candidate filenames
+                text.split(/\r?\n/).forEach(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) return;
+                    // if line looks like a filename with ext, use whole line
+                    if (/\.(jpe?g|png|webp|gif|bmp|svg|avif|heic)$/i.test(trimmed.replace(/["',]/g,''))) {
+                        tokens.add(trimmed.replace(/["',]/g,'').trim());
+                    }
+                    // also split into words
+                    trimmed.split(/[\s,;:|/\\()\[\]{}"'<>]+/).forEach(w => {
+                        const lw = w.toLowerCase().replace(/[^a-z0-9\.]/g, '');
+                        if (lw.length >= 3) tokens.add(w.trim());
+                    });
+                });
+                candidates = Array.from(tokens).map(t => ({ filename: t }));
+            }
 
+            if (candidates.length === 0) {
+                showStatus('डेटा में कोई भी इमेज का नाम या फ़ाइल पाथ नहीं मिला। कृपया डेटा जाँचें।', 'error');
+                processBtn.disabled = false;
+                return;
+            }
+
+            // Match each candidate
+            for (const cand of candidates) {
+                const matchedFile = findBestImageMatch(cand.filename, null);
                 if (matchedFile) {
-                    if (!addedPhotos.has(matchedFile.name.toLowerCase())) {
+                    const key = matchedFile.name.toLowerCase();
+                    if (!addedPhotos.has(key)) {
                         zip.file(matchedFile.name, matchedFile);
-                        addedPhotos.add(matchedFile.name.toLowerCase());
-                        matchedCount++;
+                        addedPhotos.add(key);
                     }
                 } else {
-                    if (!missingPhotosMap.has(targetFileName)) {
-                        missingPhotosMap.set(targetFileName, item.name || item.title || 'N/A');
+                    // only report as missing if candidate looked like a real filename OR was from JSON img key
+                    const isExt = /\.(jpe?g|png|webp|gif|bmp|svg|avif|heic)$/i.test(cand.filename);
+                    if (isExt || parsed.type === 'json') {
+                        const cleanName = cand.filename.replace(/\.(jpe?g|png|webp|gif|bmp|svg|avif|heic)$/i, '');
+                        // avoid duplicates
+                        if (!missingList.some(m => m.filename.toLowerCase() === cand.filename.toLowerCase())) {
+                            missingList.push({ filename: cand.filename, itemName: cleanName });
+                        }
                     }
                 }
             }
 
-            const missingList = Array.from(missingPhotosMap.entries());
+            const matchedCount = addedPhotos.size;
 
             if (matchedCount > 0) {
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -485,11 +723,11 @@
 
                 let reportHtml = '';
                 if (missingList.length > 0) {
-                    let missingRows = missingList.map(([fileName, itemName], idx) => `
+                    let missingRows = missingList.map((m, idx) => `
                         <tr>
                             <td>${idx + 1}</td>
-                            <td><span class="file-tag">${fileName}</span></td>
-                            <td style="color:#cbd5e1;">${itemName}</td>
+                            <td><span class="file-tag">${escapeHtml(m.filename)}</span></td>
+                            <td style="color:#cbd5e1;">${escapeHtml(m.itemName)}</td>
                         </tr>
                     `).join('');
 
@@ -501,7 +739,7 @@
                                     <thead>
                                         <tr>
                                             <th>#</th>
-                                            <th>फ़ोटो का नाम</th>
+                                            <th>अपेक्षित फ़ोटो का नाम</th>
                                             <th>मेन्यू आइटम</th>
                                         </tr>
                                     </thead>
@@ -510,7 +748,7 @@
                                     </tbody>
                                 </table>
                             </div>
-                            <button class="copy-missing-btn" onclick="copyMissingFiles()">अनुपलब्ध (Missing) फ़ाइलों के नाम कॉपी करें</button>
+                            <button class="copy-missing-btn" id="copyMissingBtn">अनुपलब्ध (Missing) फ़ाइलों के नाम कॉपी करें</button>
                         </div>
                     `;
                 }
@@ -523,19 +761,28 @@
                     ${reportHtml}
                 `;
 
-                window.copyMissingFiles = function() {
-                    const textToCopy = missingList.map(([fileName]) => fileName).join('\n');
-                    navigator.clipboard.writeText(textToCopy).then(() => {
-                        alert('अनुपलब्ध फ़ाइलों की सूची क्लिपबोर्ड पर कॉपी हो गई है!');
+                const copyBtn = document.getElementById('copyMissingBtn');
+                if (copyBtn) {
+                    copyBtn.addEventListener('click', function() {
+                        const textToCopy = missingList.map(m => m.filename).join('\n');
+                        navigator.clipboard.writeText(textToCopy).then(() => {
+                            alert('अनुपलब्ध फ़ाइलों की सूची क्लिपबोर्ड पर कॉपी हो गई है!');
+                        });
                     });
-                };
+                }
 
             } else {
-                showStatus('फ़ोल्डर में लिस्ट से मैच करने वाली कोई भी फ़ोटो नहीं मिली। फ़ोल्डर और नामों की जाँच करें।', 'error');
+                showStatus('फ़ोल्डर में डेटा से मैच करने वाली कोई भी फ़ोटो नहीं मिली। फ़ोल्डर और नामों की जाँच करें।', 'error');
             }
             processBtn.disabled = false;
         }, 100);
     });
+
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, s => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        })[s]);
+    }
 
     function showStatus(message, type) {
         statusBox.className = `status-${type}`;
